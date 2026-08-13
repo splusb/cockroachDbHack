@@ -15,6 +15,7 @@ except ImportError:
 from typing import List, Dict, Any
 
 from agent.config import COCKROACHDB_URL, TOP_K_RESULTS
+from agent.db import get_pool
 
 
 def retrieve_similar_incidents(
@@ -41,7 +42,8 @@ def retrieve_similar_incidents(
     vector_str = "[" + ",".join(str(v) for v in embedding) + "]"
 
     try:
-        with psycopg.connect(COCKROACHDB_URL) as conn:
+        pool = get_pool()
+        with pool.connection() as conn:
             with conn.cursor() as cur:
                 if exclude_id:
                     cur.execute(

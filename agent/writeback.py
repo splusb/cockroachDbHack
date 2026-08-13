@@ -16,6 +16,7 @@ except ImportError:
 from typing import List, Optional
 
 from agent.config import COCKROACHDB_URL
+from agent.db import get_pool
 
 FALLBACK_FILE = "/tmp/failed_writebacks.jsonl"
 
@@ -50,7 +51,8 @@ def write_incident(
     vector_str = "[" + ",".join(str(v) for v in embedding) + "]"
 
     try:
-        with psycopg.connect(COCKROACHDB_URL) as conn:
+        pool = get_pool()
+        with pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
