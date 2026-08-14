@@ -9,12 +9,14 @@ Usage:
 """
 
 import json
-import psycopg
+try:
+    import psycopg2 as psycopg
+except ImportError:
+    import psycopg
 from typing import List, Optional
 
 from agent.config import COCKROACHDB_URL
 
-# Fallback file for failed writes
 FALLBACK_FILE = "/tmp/failed_writebacks.jsonl"
 
 
@@ -34,19 +36,17 @@ def write_incident(
         symptoms: Raw alert/symptom text.
         root_cause: Proposed or confirmed root cause.
         fix: Proposed or confirmed fix.
-        embedding: 1536-dim vector from Bedrock Titan.
+        embedding: 1024-dim vector from Bedrock Titan.
         runbook_url: Optional link to runbook.
 
     Returns:
         The UUID of the inserted incident, or None if the write failed.
-        On failure, the incident is logged to a local fallback file.
     """
     if not COCKROACHDB_URL:
         print("[writeback] WARNING: COCKROACHDB_URL not set")
         _write_fallback(service, symptoms, root_cause, fix, embedding, runbook_url)
         return None
 
-    # Format embedding as vector literal
     vector_str = "[" + ",".join(str(v) for v in embedding) + "]"
 
     try:

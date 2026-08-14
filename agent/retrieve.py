@@ -6,10 +6,12 @@ Uses a direct psycopg connection to run cosine distance queries against the vect
 Usage:
     from agent.retrieve import retrieve_similar_incidents
     results = retrieve_similar_incidents(embedding_vector)
-    # Returns: List of dicts with id, service, symptoms, root_cause, fix, distance
 """
 
-import psycopg
+try:
+    import psycopg2 as psycopg
+except ImportError:
+    import psycopg
 from typing import List, Dict, Any
 
 from agent.config import COCKROACHDB_URL, TOP_K_RESULTS
@@ -24,26 +26,18 @@ def retrieve_similar_incidents(
     Search for the most similar past incidents using cosine distance.
 
     Args:
-        embedding: The 1536-dim vector to search against.
+        embedding: The 1024-dim vector to search against.
         top_k: Number of results to return (default: 5).
         exclude_id: Optional incident ID to exclude (e.g., skip self-match).
 
     Returns:
         List of dicts, each containing:
-            - id: UUID of the incident
-            - service: service name
-            - symptoms: original alert text
-            - root_cause: diagnosed root cause (may be None)
-            - fix: proposed fix (may be None)
-            - distance: cosine distance (lower = more similar)
-
-    If the database is unreachable, returns an empty list with a warning printed.
+            - id, service, symptoms, root_cause, fix, distance
     """
     if not COCKROACHDB_URL:
         print("[retrieve] WARNING: COCKROACHDB_URL not set, returning empty results")
         return []
 
-    # Format embedding as a vector literal string
     vector_str = "[" + ",".join(str(v) for v in embedding) + "]"
 
     try:
@@ -74,7 +68,6 @@ def retrieve_similar_incidents(
                     )
 
                 rows = cur.fetchall()
-
                 results = []
                 for row in rows:
                     results.append({
@@ -85,7 +78,6 @@ def retrieve_similar_incidents(
                         "fix": row[4],
                         "distance": float(row[5]),
                     })
-
                 return results
 
     except Exception as e:

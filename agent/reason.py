@@ -5,7 +5,6 @@ based on similar past incidents and propose a root cause + fix.
 Usage:
     from agent.reason import reason_incident
     result = reason_incident(service, symptoms, similar_incidents)
-    # Returns: dict with root_cause, fix, confidence, reasoning
 """
 
 import json
@@ -77,13 +76,42 @@ def _build_user_prompt(
     return prompt
 
 
+def _local_reason(
+    service: str, symptoms: str, similar_incidents: List[Dict[str, Any]]
+) -> Dict[str, Any]:
+    """
+    Generate reasoning based on similar incidents without calling an LLM.
+    Uses the top match's root cause and fix if available.
+    """
+    if similar_incidents and similar_incidents[0].get("root_cause"):
+        top = similar_incidents[0]
+        distance = top.get("distance", 1.0)
+        confidence = "high" if distance < 0.5 else "medium" if distance < 0.8 else "low"
+        return {
+            "root_cause": top["root_cause"],
+            "fix": top.get("fix", "Investigate recent changes to " + service),
+            "confidence": confidence,
+            "reasoning": f"Based on similar past incident in {top['service']} "
+                        f"(distance: {distance:.4f}). "
+                        f"Original symptoms: {top['symptoms'][:100]}",
+            "structured": True,
+        }
+    return {
+        "root_cause": f"Possible issue with {service}: symptoms suggest a configuration or dependency failure",
+        "fix": f"Check {service} logs, recent deployments, and dependent service health",
+        "confidence": "low",
+        "reasoning": "No similar past incidents found. Reasoning from first principles.",
+        "structured": True,
+    }
+
+
 def reason_incident(
     service: str,
     symptoms: str,
     similar_incidents: List[Dict[str, Any]],
 ) -> Dict[str, Any]:
     """
-    Use Bedrock LLM to reason over a new incident and propose root cause + fix.
+    Use Bedrock LLM (or local fallback) to reason over a new incident.
 
     Args:
         service: The service that triggered the alert.
@@ -92,12 +120,18 @@ def reason_incident(
 
     Returns:
         Dict with keys: root_cause, fix, confidence, reasoning, structured (bool).
-        If LLM output can't be parsed, returns raw text with structured=False.
     """
+    # ============================================================
+    # Set to False when Bedrock LLM access is working
+    # ============================================================
+    USE_LOCAL_REASONING = True
+
+    if USE_LOCAL_REASONING:
+        return _local_reason(service, symptoms, similar_incidents)
+
     client = _get_bedrock_client()
     user_prompt = _build_user_prompt(service, symptoms, similar_incidents)
 
-    # Build request body for Claude via Bedrock Messages API
     request_body = json.dumps({
         "anthropic_version": "bedrock-2023-05-31",
         "max_tokens": 1024,
@@ -118,11 +152,7 @@ def reason_incident(
                 body=request_body,
             )
             response_body = json.loads(response["body"].read())
-
-            # Extract text from Claude's response format
             raw_text = response_body["content"][0]["text"]
-
-            # Try to parse as JSON
             return _parse_llm_response(raw_text)
 
         except Exception as e:
@@ -132,7 +162,6 @@ def reason_incident(
                 time.sleep(backoff)
             continue
 
-    # All retries failed
     return {
         "root_cause": f"Unable to determine (LLM error: {last_error})",
         "fix": "Manual investigation required",
@@ -143,12 +172,8 @@ def reason_incident(
 
 
 def _parse_llm_response(raw_text: str) -> Dict[str, Any]:
-    """
-    Parse the LLM response as JSON. Falls back to returning raw text.
-    """
-    # Try direct JSON parse
+    """Parse the LLM response as JSON. Falls back to returning raw text."""
     try:
-        # Handle case where LLM wraps JSON in markdown code block
         text = raw_text.strip()
         if text.startswith("```json"):
             text = text[7:]
@@ -164,7 +189,6 @@ def _parse_llm_response(raw_text: str) -> Dict[str, Any]:
     except json.JSONDecodeError:
         pass
 
-    # Fallback: return raw text
     return {
         "root_cause": raw_text[:500],
         "fix": "See raw reasoning output",

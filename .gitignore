@@ -9,3 +9,6 @@ dist/
 build/
 .pytest_cache/
 .mypy_cache/
+cockroach-data/
+lambda_package/
+deployment.zip
