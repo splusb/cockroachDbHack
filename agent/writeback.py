@@ -28,6 +28,9 @@ def write_incident(
     fix: str,
     embedding: List[float],
     runbook_url: Optional[str] = None,
+    status: str = "pending",
+    confidence: Optional[str] = None,
+    reasoning: Optional[str] = None,
 ) -> Optional[str]:
     """
     Write a new incident record to CockroachDB with its embedding.
@@ -39,6 +42,9 @@ def write_incident(
         fix: Proposed or confirmed fix.
         embedding: 1024-dim vector from Bedrock Titan.
         runbook_url: Optional link to runbook.
+        status: 'pending' (awaiting review) or 'confirmed' (accepted into memory).
+        confidence: Agent confidence level (high/medium/low).
+        reasoning: Agent reasoning text.
 
     Returns:
         The UUID of the inserted incident, or None if the write failed.
@@ -56,17 +62,17 @@ def write_incident(
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO incidents (service, symptoms, root_cause, fix, runbook_url, embedding)
-                    VALUES (%s, %s, %s, %s, %s, %s::vector)
+                    INSERT INTO incidents (service, symptoms, root_cause, fix, runbook_url, status, confidence, reasoning, embedding)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s::vector)
                     RETURNING id
                     """,
-                    (service, symptoms, root_cause, fix, runbook_url, vector_str),
+                    (service, symptoms, root_cause, fix, runbook_url, status, confidence, reasoning, vector_str),
                 )
                 result = cur.fetchone()
                 conn.commit()
 
                 incident_id = str(result[0])
-                print(f"[writeback] Incident written successfully: {incident_id}")
+                print(f"[writeback] Incident written successfully: {incident_id} (status={status})")
                 return incident_id
 
     except Exception as e:

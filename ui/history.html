@@ -278,6 +278,7 @@
     <h1>Incident Memory Agent</h1>
     <nav class="nav">
       <a href="/" class="nav-link">Investigate</a>
+      <a href="/pending" class="nav-link">New Incidents</a>
       <a href="/history" class="nav-link active">History</a>
     </nav>
     <div class="status">
@@ -349,9 +350,14 @@
     function buildFilters() {
       const services = [...new Set(allIncidents.map(i => i.service))].sort();
       const container = document.getElementById('filters');
-      container.innerHTML = `<button class="filter-btn active" data-filter="all">All</button>`;
+      container.innerHTML = `
+        <button class="filter-btn active" data-filter="all">All</button>
+        <button class="filter-btn" data-filter="open">🟠 Open</button>
+        <button class="filter-btn" data-filter="resolved">🟢 Resolved</button>
+        <span style="color:#3f3f46; margin: 0 8px;">|</span>
+      `;
       services.forEach(s => {
-        container.innerHTML += `<button class="filter-btn" data-filter="${s}">${s}</button>`;
+        container.innerHTML += `<button class="filter-btn" data-filter="service:${s}">${s}</button>`;
       });
 
       container.querySelectorAll('.filter-btn').forEach(btn => {
@@ -365,9 +371,18 @@
     }
 
     function renderTable() {
-      const filtered = activeFilter === 'all'
-        ? allIncidents
-        : allIncidents.filter(i => i.service === activeFilter);
+      let filtered;
+      if (activeFilter === 'all') {
+        filtered = allIncidents;
+      } else if (activeFilter === 'open') {
+        filtered = allIncidents.filter(i => !i.resolved);
+      } else if (activeFilter === 'resolved') {
+        filtered = allIncidents.filter(i => i.resolved);
+      } else if (activeFilter.startsWith('service:')) {
+        filtered = allIncidents.filter(i => i.service === activeFilter.replace('service:', ''));
+      } else {
+        filtered = allIncidents;
+      }
 
       if (filtered.length === 0) {
         document.getElementById('table-container').innerHTML =
@@ -439,6 +454,16 @@
               <div class="label">Incident ID</div>
               <div class="value" style="font-family: monospace; font-size: 12px; color: #71717a;">${inc.id}</div>
             </div>
+            ${!inc.resolved ? `
+            <div class="expanded-section" style="margin-top: 12px;">
+              <button onclick="resolveIncident('${inc.id}', this)" style="
+                background: #059669; color: white; border: none; padding: 8px 16px;
+                border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
+              ">✓ Mark as Resolved</button>
+            </div>` : `
+            <div class="expanded-section" style="margin-top: 12px;">
+              <span style="color: #4ade80; font-size: 13px;">✓ This incident is resolved</span>
+            </div>`}
           </div>
         </td>`;
       rowEl.after(expandedRow);
@@ -462,6 +487,27 @@
     function escapeHtml(str) {
       if (!str) return '';
       return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    async function resolveIncident(id, btnEl) {
+      btnEl.disabled = true;
+      btnEl.textContent = 'Resolving...';
+
+      try {
+        const res = await fetch(`/api/incidents/${id}/resolve`, { method: 'PATCH' });
+        if (res.ok) {
+          // Update local data and re-render
+          const inc = allIncidents.find(i => i.id === id);
+          if (inc) inc.resolved = true;
+          updateStats();
+          renderTable();
+        } else {
+          const data = await res.json();
+          btnEl.textContent = `Failed: ${data.error || 'unknown'}`;
+        }
+      } catch (err) {
+        btnEl.textContent = `Error: ${err.message}`;
+      }
     }
 
     loadIncidents();

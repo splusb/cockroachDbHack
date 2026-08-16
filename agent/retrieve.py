@@ -51,7 +51,7 @@ def retrieve_similar_incidents(
                         SELECT id, service, symptoms, root_cause, fix,
                                embedding <=> %s::vector AS distance
                         FROM incidents
-                        WHERE id != %s
+                        WHERE id != %s AND status = 'confirmed'
                         ORDER BY embedding <=> %s::vector
                         LIMIT %s
                         """,
@@ -63,6 +63,7 @@ def retrieve_similar_incidents(
                         SELECT id, service, symptoms, root_cause, fix,
                                embedding <=> %s::vector AS distance
                         FROM incidents
+                        WHERE status = 'confirmed'
                         ORDER BY embedding <=> %s::vector
                         LIMIT %s
                         """,

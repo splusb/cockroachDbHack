@@ -1,0 +1,550 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>New Incidents — Memory Agent</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e4e4e7;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .header {
+      padding: 16px 24px;
+      border-bottom: 1px solid #27272a;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      background: #0f1117;
+      z-index: 100;
+    }
+
+    .header .logo {
+      width: 32px;
+      height: 32px;
+      background: linear-gradient(135deg, #6366f1, #8b5cf6);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+    }
+
+    .header h1 { font-size: 18px; font-weight: 600; }
+
+    .header .nav {
+      display: flex;
+      gap: 4px;
+      margin-left: 24px;
+    }
+
+    .header .nav-link {
+      color: #71717a;
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      transition: all 0.2s;
+    }
+
+    .header .nav-link:hover { color: #e4e4e7; background: #1c1c22; }
+    .header .nav-link.active { color: #e4e4e7; background: #27272a; }
+
+    .header .nav-link .badge {
+      background: #ef4444;
+      color: white;
+      font-size: 10px;
+      padding: 1px 6px;
+      border-radius: 10px;
+      margin-left: 4px;
+    }
+
+    .header .status {
+      margin-left: auto;
+      font-size: 12px;
+      color: #71717a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .header .status .dot {
+      width: 8px;
+      height: 8px;
+      background: #22c55e;
+      border-radius: 50%;
+    }
+
+    /* Content */
+    .content {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+    }
+
+    .content-inner {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    .page-title {
+      font-size: 22px;
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+
+    .page-subtitle {
+      font-size: 14px;
+      color: #71717a;
+      margin-bottom: 24px;
+    }
+
+    /* Empty state */
+    .empty-state {
+      text-align: center;
+      padding: 80px 20px;
+      color: #52525b;
+    }
+
+    .empty-state .icon { font-size: 48px; margin-bottom: 12px; }
+    .empty-state h3 { font-size: 18px; color: #71717a; margin-bottom: 8px; }
+    .empty-state p { font-size: 14px; max-width: 400px; margin: 0 auto; line-height: 1.5; }
+
+    /* Incident Card */
+    .incident-card {
+      background: #1c1c22;
+      border: 1px solid #27272a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+      animation: slideIn 0.3s ease;
+    }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .incident-card .card-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+
+    .service-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .service-auth { background: #1e1b4b; color: #818cf8; }
+    .service-payments { background: #052e16; color: #4ade80; }
+    .service-search { background: #422006; color: #fb923c; }
+    .service-notification { background: #4c0519; color: #fb7185; }
+    .service-api { background: #164e63; color: #22d3ee; }
+
+    .confidence-badge {
+      display: inline-block;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+    }
+
+    .confidence-high { background: #052e16; color: #4ade80; }
+    .confidence-medium { background: #422006; color: #fb923c; }
+    .confidence-low { background: #450a0a; color: #f87171; }
+
+    .card-time {
+      font-size: 11px;
+      color: #52525b;
+      margin-left: auto;
+    }
+
+    .card-section {
+      margin-bottom: 12px;
+    }
+
+    .card-section .label {
+      font-size: 11px;
+      color: #71717a;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 4px;
+    }
+
+    .card-section .value {
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .card-section .value.symptoms { color: #a1a1aa; }
+    .card-section .value.root-cause { color: #f87171; }
+    .card-section .value.fix { color: #4ade80; }
+    .card-section .value.reasoning { color: #71717a; font-size: 13px; }
+
+    /* Similar incidents */
+    .similar-section {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid #27272a;
+    }
+
+    .similar-item {
+      background: #0f1117;
+      border: 1px solid #27272a;
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-top: 8px;
+      font-size: 12px;
+    }
+
+    .similar-item .sim-service {
+      color: #8b5cf6;
+      font-weight: 600;
+      text-transform: uppercase;
+      font-size: 10px;
+    }
+
+    .similar-item .sim-text { color: #a1a1aa; margin-top: 2px; }
+    .similar-item .sim-fix { color: #4ade80; margin-top: 4px; font-size: 11px; }
+    .similar-item .sim-distance { color: #52525b; font-size: 10px; margin-top: 2px; }
+
+    /* Action buttons */
+    .card-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #27272a;
+    }
+
+    .btn-accept {
+      flex: 1;
+      padding: 10px 16px;
+      background: #059669;
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-accept:hover { background: #047857; }
+
+    .btn-dismiss {
+      padding: 10px 16px;
+      background: transparent;
+      border: 1px solid #27272a;
+      color: #71717a;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-dismiss:hover { border-color: #ef4444; color: #f87171; }
+
+    .btn-accept:disabled, .btn-dismiss:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    /* Status message */
+    .card-status {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 6px;
+      font-size: 13px;
+      display: none;
+    }
+
+    .card-status.confirmed {
+      display: block;
+      background: rgba(5, 150, 105, 0.1);
+      border: 1px solid rgba(5, 150, 105, 0.3);
+      color: #4ade80;
+    }
+
+    .card-status.dismissed {
+      display: block;
+      background: rgba(239, 68, 68, 0.1);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #f87171;
+    }
+
+    /* Refresh button */
+    .refresh-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 20px;
+    }
+
+    .refresh-btn {
+      background: #27272a;
+      border: 1px solid #3f3f46;
+      color: #a1a1aa;
+      padding: 8px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      cursor: pointer;
+      transition: all 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .refresh-btn:hover { background: #3f3f46; color: #e4e4e7; }
+
+    .count-label {
+      font-size: 13px;
+      color: #71717a;
+    }
+
+    .count-label strong {
+      color: #e4e4e7;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo">🧠</div>
+    <h1>Incident Memory Agent</h1>
+    <nav class="nav">
+      <a href="/" class="nav-link">Investigate</a>
+      <a href="/pending" class="nav-link active">New Incidents <span class="badge" id="nav-badge">0</span></a>
+      <a href="/history" class="nav-link">History</a>
+    </nav>
+    <div class="status">
+      <div class="dot"></div>
+      <span>Connected</span>
+    </div>
+  </div>
+
+  <div class="content">
+    <div class="content-inner">
+      <h2 class="page-title">New Incidents</h2>
+      <p class="page-subtitle">Review pending investigations. Accept to save to memory, or dismiss duplicates.</p>
+
+      <div class="refresh-bar">
+        <span class="count-label"><strong id="count">0</strong> pending incidents</span>
+        <button class="refresh-btn" onclick="loadPending()">🔄 Refresh</button>
+      </div>
+
+      <div id="incidents-list">
+        <div class="empty-state">
+          <div class="icon">📋</div>
+          <h3>No pending incidents</h3>
+          <p>When bugs are reported from the monitoring system, they'll appear here for review before being saved to memory.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const listEl = document.getElementById('incidents-list');
+    const countEl = document.getElementById('count');
+    const badgeEl = document.getElementById('nav-badge');
+
+    // Auto-refresh every 5 seconds (only update if data changed)
+    let lastDataHash = '';
+    setInterval(loadPending, 5000);
+    loadPending();
+
+    async function loadPending() {
+      try {
+        const res = await fetch('/api/pending');
+        const incidents = await res.json();
+
+        // Only re-render if data actually changed
+        const newHash = JSON.stringify(incidents.map(i => i.id));
+        if (newHash === lastDataHash) return;
+        lastDataHash = newHash;
+
+        countEl.textContent = incidents.length;
+        badgeEl.textContent = incidents.length;
+
+        if (incidents.length === 0) {
+          listEl.innerHTML = `
+            <div class="empty-state">
+              <div class="icon">📋</div>
+              <h3>No pending incidents</h3>
+              <p>When bugs are reported from the monitoring system, they'll appear here for review before being saved to memory.</p>
+            </div>`;
+          return;
+        }
+
+        listEl.innerHTML = incidents.map(inc => renderCard(inc)).join('');
+      } catch (err) {
+        console.error('Failed to load pending:', err);
+      }
+    }
+
+    function getServiceClass(service) {
+      const map = {
+        'auth-service': 'service-auth',
+        'payments-api': 'service-payments',
+        'search-indexer': 'service-search',
+        'notification-worker': 'service-notification',
+        'api-gateway': 'service-api'
+      };
+      return map[service] || 'service-api';
+    }
+
+    function relativeTime(dateStr) {
+      const now = new Date();
+      const date = new Date(dateStr);
+      const diffMs = now - date;
+      const diffSecs = Math.floor(diffMs / 1000);
+      const diffMins = Math.floor(diffSecs / 60);
+
+      if (diffSecs < 60) return `${diffSecs}s ago`;
+      if (diffMins < 60) return `${diffMins}m ago`;
+      return `${Math.floor(diffMins / 60)}h ago`;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function renderCard(inc) {
+      const confClass = `confidence-${inc.confidence || 'low'}`;
+      const incId = inc.id || inc.pending_id;
+
+      let similarHtml = '';
+      if (inc.similar_incidents && inc.similar_incidents.length > 0) {
+        similarHtml = `
+          <div class="similar-section">
+            <div class="label">Similar Past Incidents (${inc.similar_incidents.length} found)</div>
+            ${inc.similar_incidents.slice(0, 3).map(s => `
+              <div class="similar-item">
+                <div class="sim-service">${escapeHtml(s.service)}</div>
+                <div class="sim-text">${escapeHtml(s.symptoms.substring(0, 100))}...</div>
+                ${s.fix ? `<div class="sim-fix">Fix: ${escapeHtml(s.fix.substring(0, 100))}</div>` : ''}
+                <div class="sim-distance">Similarity: ${((1 - s.distance) * 100).toFixed(1)}%</div>
+              </div>
+            `).join('')}
+          </div>`;
+      }
+
+      return `
+        <div class="incident-card" id="card-${incId}">
+          <div class="card-header">
+            <span class="service-badge ${getServiceClass(inc.service)}">${escapeHtml(inc.service)}</span>
+            <span class="confidence-badge ${confClass}">${inc.confidence || 'low'} confidence</span>
+            <span class="card-time">${relativeTime(inc.created_at)}</span>
+          </div>
+
+          <div class="card-section">
+            <div class="label">Symptoms</div>
+            <div class="value symptoms">${escapeHtml(inc.symptoms)}</div>
+          </div>
+
+          <div class="card-section">
+            <div class="label">Proposed Root Cause</div>
+            <div class="value root-cause">${escapeHtml(inc.proposed_root_cause)}</div>
+          </div>
+
+          <div class="card-section">
+            <div class="label">Proposed Fix</div>
+            <div class="value fix">${escapeHtml(inc.proposed_fix)}</div>
+          </div>
+
+          <div class="card-section">
+            <div class="label">Reasoning</div>
+            <div class="value reasoning">${escapeHtml(inc.reasoning || '')}</div>
+          </div>
+
+          ${similarHtml}
+
+          <div class="card-actions" id="actions-${incId}">
+            <button class="btn-accept" onclick="acceptIncident('${incId}')">✓ Accept — Save to Memory</button>
+            <button class="btn-dismiss" onclick="dismissIncident('${incId}')">✗ Dismiss</button>
+          </div>
+
+          <div class="card-status" id="status-${incId}"></div>
+        </div>`;
+    }
+
+    async function acceptIncident(incId) {
+      const actionsEl = document.getElementById('actions-' + incId);
+      const statusEl = document.getElementById('status-' + incId);
+      actionsEl.querySelectorAll('button').forEach(b => b.disabled = true);
+
+      try {
+        const res = await fetch(`/api/confirm/${incId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({}),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          statusEl.className = 'card-status confirmed';
+          statusEl.textContent = `✓ Saved to memory (ID: ${data.incident_id || incId}). Future investigations will benefit.`;
+          actionsEl.style.display = 'none';
+          setTimeout(loadPending, 1000);
+        } else {
+          statusEl.className = 'card-status dismissed';
+          statusEl.textContent = `✗ Failed: ${data.message || data.error}`;
+          actionsEl.querySelectorAll('button').forEach(b => b.disabled = false);
+        }
+      } catch (err) {
+        statusEl.className = 'card-status dismissed';
+        statusEl.textContent = `✗ Error: ${err.message}`;
+        actionsEl.querySelectorAll('button').forEach(b => b.disabled = false);
+      }
+    }
+
+    async function dismissIncident(incId) {
+      const actionsEl = document.getElementById('actions-' + incId);
+      const statusEl = document.getElementById('status-' + incId);
+      actionsEl.querySelectorAll('button').forEach(b => b.disabled = true);
+
+      try {
+        const res = await fetch(`/api/pending/${incId}`, {
+          method: 'DELETE',
+        });
+
+        if (res.ok) {
+          statusEl.className = 'card-status dismissed';
+          statusEl.textContent = '🗑️ Dismissed — not saved to memory.';
+          actionsEl.style.display = 'none';
+          setTimeout(loadPending, 1000);
+        }
+      } catch (err) {
+        actionsEl.querySelectorAll('button').forEach(b => b.disabled = false);
+      }
+    }
+  </script>
+</body>
+</html>
