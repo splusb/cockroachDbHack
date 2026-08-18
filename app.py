@@ -45,11 +45,6 @@ def pending_page():
     return send_from_directory("ui", "pending.html")
 
 
-@app.route("/buggy")
-def buggy():
-    return send_from_directory("ui", "buggy-app.html")
-
-
 # ============================================================
 # API Routes
 # ============================================================
