@@ -294,25 +294,24 @@
 
       <div class="refresh-bar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
         <span class="count-label"><strong id="stat-total-label">—</strong> incidents in memory</span>
-        <button onclick="resetBugs()" style="
-          background: #dc2626; border: none; color: white; padding: 8px 14px;
-          border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
-        ">🔄 Reset All Bugs</button>
       </div>
 
-      <!-- Bug Control Panel -->
-      <div id="bugPanel" style="
+      <!-- Bug Control Panel - Collapsible -->
+      <details id="bugPanel" style="
         background: #1c1c22; border: 1px solid #27272a; border-radius: 10px;
-        padding: 16px 20px; margin-bottom: 24px;
+        padding: 4px 16px; margin-bottom: 24px;
       ">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-          <span style="font-size:13px; font-weight:600; color:#e4e4e7;">Bug Control Panel</span>
-          <button onclick="loadBugFlags()" style="background:none; border:none; color:#71717a; font-size:11px; cursor:pointer;">↻ Refresh</button>
-        </div>
-        <div id="bugFlags" style="display:grid; gap:10px;">
+        <summary style="cursor:pointer; padding:12px 0; font-size:13px; font-weight:600; color:#a1a1aa; list-style:none; display:flex; align-items:center; gap:8px;">
+          <span style="font-size:10px;">▶</span> Bug Control Panel
+          <button onclick="event.preventDefault(); resetBugs();" style="
+            margin-left:auto; background: #dc2626; border: none; color: white; padding: 5px 10px;
+            border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer;
+          ">Reset All</button>
+        </summary>
+        <div id="bugFlags" style="display:grid; gap:8px; padding-bottom:12px;">
           <div style="color:#71717a; font-size:12px;">Loading...</div>
         </div>
-      </div>
+      </details>
 
       <div class="stats-bar" id="stats-bar">
         <div class="stat-item">
@@ -600,17 +599,17 @@
         container.innerHTML = data.flags.map(f => {
           const label = shortNames[f.bug_id] || f.bug_id;
           return `
-          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#0f1117; border-radius:6px; border:1px solid #27272a;">
-            <span style="font-size:13px; color:#e4e4e7;">${label}</span>
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 12px; background:#0f1117; border-radius:6px; border:1px solid #27272a;">
+            <span style="font-size:12px; color:#e4e4e7;">${label}</span>
             <div style="display:flex; align-items:center; gap:8px;">
               <span style="font-size:11px; padding:3px 8px; border-radius:4px; font-weight:600;
                 ${f.healed ? 'background:#052e16; color:#4ade80;' : 'background:#422006; color:#fb923c;'}">
                 ${f.healed ? 'Healed' : 'Active'}
               </span>
-              <button onclick="toggleBug('${f.bug_id}', ${f.healed})" style="
-                background: ${f.healed ? '#dc2626' : '#059669'}; border: none; color: white;
-                padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer;
-              ">${f.healed ? 'Re-inject' : 'Heal'}</button>
+              ${f.healed ? `<button onclick="toggleBug('${f.bug_id}', true)" style="
+                background:#dc2626; border:none; color:white;
+                padding:4px 8px; border-radius:4px; font-size:10px; font-weight:600; cursor:pointer;
+              ">Re-inject</button>` : ''}
             </div>
           </div>`;
         }).join('');
