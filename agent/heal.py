@@ -1,143 +1,124 @@
 """
-Self-healing module — sets heal_flags in CockroachDB to fix bugs at runtime.
+Self-healing module — manages heal_flags in CockroachDB.
 
-Instead of patching files on disk, the agent flips a boolean flag in the database.
-The demo-app checks these flags on each request and runs the fixed code path when healed.
+Instead of modifying source files, this approach uses a database table (heal_flags)
+to toggle between buggy and fixed code paths in the demo app.
 
-Usage:
-    from agent.heal import heal_bug, is_healed, reset_all_bugs
+The demo app checks: if is_healed("bug_id") → use fixed code, else → use buggy code.
 """
 
 import psycopg
-from typing import Optional
+from typing import Optional, List, Dict
 
 from agent.config import COCKROACHDB_URL
 
-# Maps symptom keywords to bug_ids in the heal_flags table
+# Map symptoms keywords to bug_ids
 BUG_KEYWORD_MAP = {
-    "password": "login_password_check",
     "login": "login_password_check",
-    "authentication": "login_password_check",
+    "password": "login_password_check",
+    "401": "login_password_check",
+    "credentials": "login_password_check",
+    "rejected": "login_password_check",
     "inverted": "login_password_check",
-    "credential": "login_password_check",
     "search": "search_column_name",
-    "title": "search_column_name",
     "column": "search_column_name",
-    "undefined_column": "search_column_name",
+    "title": "search_column_name",
+    "results": "search_column_name",
     "checkout": "checkout_total_calc",
     "total": "checkout_total_calc",
     "calculation": "checkout_total_calc",
-    "multiply": "checkout_total_calc",
-    "tax": "checkout_total_calc",
+    "multiplication": "checkout_total_calc",
     "subtotal": "checkout_total_calc",
+    "tax": "checkout_total_calc",
 }
 
 
-def heal_bug(bug_id: str) -> bool:
-    """
-    Mark a bug as healed in the heal_flags table.
+def identify_bug(symptoms: str) -> Optional[str]:
+    """Identify which bug the symptoms relate to based on keywords."""
+    symptoms_lower = symptoms.lower()
+    scores = {"login_password_check": 0, "search_column_name": 0, "checkout_total_calc": 0}
 
-    Args:
-        bug_id: The bug identifier (e.g., 'login_password_check')
+    for keyword, bug_id in BUG_KEYWORD_MAP.items():
+        if keyword in symptoms_lower:
+            scores[bug_id] += 1
 
-    Returns:
-        True if the flag was set successfully, False otherwise.
-    """
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else None
+
+
+def heal_bug(bug_id: str, fix_description: str = None) -> bool:
+    """Set a heal_flag to true in CockroachDB, activating the fix."""
     if not COCKROACHDB_URL:
-        print("[heal] No COCKROACHDB_URL configured")
+        print("[heal] No DB URL configured")
         return False
 
     try:
         conn = psycopg.connect(COCKROACHDB_URL)
         cur = conn.cursor()
-        cur.execute(
-            "UPDATE heal_flags SET healed = true, healed_at = now() WHERE bug_id = %s AND healed = false",
-            (bug_id,)
-        )
-        conn.commit()
+
+        if fix_description:
+            cur.execute(
+                "UPDATE heal_flags SET healed = true, healed_at = now(), fix_description = %s WHERE bug_id = %s AND healed = false",
+                (fix_description, bug_id),
+            )
+        else:
+            cur.execute(
+                "UPDATE heal_flags SET healed = true, healed_at = now() WHERE bug_id = %s AND healed = false",
+                (bug_id,),
+            )
+
         affected = cur.rowcount
+        conn.commit()
         conn.close()
 
         if affected > 0:
-            print(f"[heal] ✓ Bug '{bug_id}' marked as healed in DB")
+            print(f"[heal] ✓ Bug '{bug_id}' healed")
             return True
         else:
-            print(f"[heal] Bug '{bug_id}' was already healed or not found")
+            print(f"[heal] Bug '{bug_id}' already healed or not found")
             return False
+
     except Exception as e:
         print(f"[heal] ERROR: {e}")
         return False
 
 
-def identify_bug(symptoms: str) -> Optional[str]:
-    """
-    Given symptoms text, identify which bug_id it matches.
-
-    Returns:
-        The bug_id string, or None if no match found.
-    """
-    symptoms_lower = symptoms.lower()
-    for keyword, bug_id in BUG_KEYWORD_MAP.items():
-        if keyword in symptoms_lower:
-            return bug_id
-    return None
-
-
 def auto_heal_from_symptoms(symptoms: str) -> Optional[str]:
     """
-    Attempt to auto-heal based on symptoms.
-    Identifies the bug and sets the flag in DB.
-
-    Returns:
-        Description of what was healed, or None if no match.
+    Identify and heal a bug based on symptoms text.
+    Returns the bug_id that was healed, or None if nothing matched.
     """
     bug_id = identify_bug(symptoms)
     if not bug_id:
-        print("[heal] Could not match symptoms to a known bug")
         return None
 
     success = heal_bug(bug_id)
-    if success:
-        return f"Healed bug: {bug_id}"
-    return None
-
-
-def is_healed(bug_id: str) -> bool:
-    """Check if a bug has been healed."""
-    if not COCKROACHDB_URL:
-        return False
-    try:
-        conn = psycopg.connect(COCKROACHDB_URL)
-        cur = conn.cursor()
-        cur.execute("SELECT healed FROM heal_flags WHERE bug_id = %s", (bug_id,))
-        row = cur.fetchone()
-        conn.close()
-        return row[0] if row else False
-    except Exception:
-        return False
+    return bug_id if success else None
 
 
 def reset_all_bugs() -> bool:
-    """Reset all heal flags to false (re-inject all bugs)."""
+    """Reset all heal_flags to false (re-inject all bugs for demo replay)."""
     if not COCKROACHDB_URL:
         return False
+
     try:
         conn = psycopg.connect(COCKROACHDB_URL)
         cur = conn.cursor()
-        cur.execute("UPDATE heal_flags SET healed = false, healed_at = NULL")
+        cur.execute("UPDATE heal_flags SET healed = false, healed_at = NULL, fix_description = NULL")
         conn.commit()
         conn.close()
-        print("[heal] ✓ All bugs reset to unhealed")
+        print("[heal] ✓ All bugs reset (re-injected)")
         return True
     except Exception as e:
         print(f"[heal] ERROR resetting: {e}")
         return False
 
 
-def get_all_flags() -> list:
+def get_all_flags() -> List[Dict]:
     """Get the current state of all heal flags."""
     if not COCKROACHDB_URL:
         return []
+
     try:
         conn = psycopg.connect(COCKROACHDB_URL)
         cur = conn.cursor()
@@ -152,5 +133,5 @@ def get_all_flags() -> list:
             "fix_description": r[4],
         } for r in rows]
     except Exception as e:
-        print(f"[heal] ERROR: {e}")
+        print(f"[heal] ERROR getting flags: {e}")
         return []
