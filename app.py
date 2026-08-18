@@ -106,7 +106,7 @@ def list_pending():
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    SELECT id, created_at, service, symptoms, root_cause, fix, confidence, reasoning
+                    SELECT id, created_at, service, symptoms, root_cause, fix, confidence
                     FROM incidents
                     WHERE status = 'pending'
                     ORDER BY created_at DESC
@@ -124,7 +124,6 @@ def list_pending():
                         "proposed_root_cause": row[4],
                         "proposed_fix": row[5],
                         "confidence": row[6],
-                        "reasoning": row[7],
                     })
                 return jsonify(incidents)
     except Exception as e:
