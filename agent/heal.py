@@ -12,7 +12,8 @@ from typing import Optional, List, Dict
 
 from agent.config import COCKROACHDB_URL
 
-# Map symptoms keywords to bug_ids
+# Map symptoms keywords to bug_ids (for DIRECT symptom matching)
+# Note: order bug is intentionally NOT here — it requires human review first time
 BUG_KEYWORD_MAP = {
     "login": "login_password_check",
     "password": "login_password_check",
@@ -30,13 +31,20 @@ BUG_KEYWORD_MAP = {
     "multiplication": "checkout_total_calc",
     "subtotal": "checkout_total_calc",
     "tax": "checkout_total_calc",
-    # NOTE: "order" keywords intentionally NOT mapped — this bug should NOT auto-heal
-    # to demonstrate the manual review flow in New Incidents page
+}
+
+# Separate map for MEMORY-LOOP matching (checking past incident root_cause/fix)
+# These keywords are only checked against previously resolved incidents, not current symptoms
+MEMORY_KEYWORD_MAP = {
+    "user_name": "order_creation_column",
+    "user_id": "order_creation_column",
+    "order": "order_creation_column",
+    "INSERT": "order_creation_column",
 }
 
 
 def identify_bug(symptoms: str) -> Optional[str]:
-    """Identify which bug the symptoms relate to based on keywords."""
+    """Identify which bug the symptoms relate to based on keywords (direct match only)."""
     symptoms_lower = symptoms.lower()
     scores = {
         "login_password_check": 0,
@@ -47,6 +55,29 @@ def identify_bug(symptoms: str) -> Optional[str]:
 
     for keyword, bug_id in BUG_KEYWORD_MAP.items():
         if keyword in symptoms_lower:
+            scores[bug_id] += 1
+
+    best = max(scores, key=scores.get)
+    return best if scores[best] > 0 else None
+
+
+def identify_bug_from_memory(text: str) -> Optional[str]:
+    """Identify a bug from past incident root_cause/fix text (memory loop matching)."""
+    text_lower = text.lower()
+    scores = {
+        "login_password_check": 0,
+        "search_column_name": 0,
+        "checkout_total_calc": 0,
+        "order_creation_column": 0,
+    }
+
+    for keyword, bug_id in MEMORY_KEYWORD_MAP.items():
+        if keyword.lower() in text_lower:
+            scores[bug_id] += 1
+
+    # Also check direct map
+    for keyword, bug_id in BUG_KEYWORD_MAP.items():
+        if keyword in text_lower:
             scores[bug_id] += 1
 
     best = max(scores, key=scores.get)

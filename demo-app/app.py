@@ -501,7 +501,10 @@ SHOP_PAGE = """
                 const res = await fetch('/products');
                 const data = await res.json();
                 if (data.success) renderProducts(data.products);
-                else showToast('Error loading products: ' + data.error, true);
+                else {
+                    showToast('Error loading products: ' + data.error, true);
+                    reportError('Product listing fails when loading the shop page. SQL error: ' + data.error + '. The SELECT query may be using a wrong column name.');
+                }
             } catch (e) { showToast('Network error', true); }
         }
 

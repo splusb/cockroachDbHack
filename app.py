@@ -20,7 +20,7 @@ from agent.embed import embed_symptoms
 from agent.retrieve import retrieve_similar_incidents
 from agent.reason import reason_incident
 from agent.writeback import write_incident
-from agent.heal import heal_bug, identify_bug, auto_heal_from_symptoms, reset_all_bugs, get_all_flags
+from agent.heal import heal_bug, identify_bug, auto_heal_from_symptoms, reset_all_bugs, get_all_flags, identify_bug_from_memory
 
 app = Flask(__name__, static_folder="ui")
 CORS(app)
@@ -187,9 +187,24 @@ def investigate():
             heal_action = auto_heal_from_symptoms(symptoms)
             if heal_action:
                 healed = True
-                print(f"  [5/5] ✓ AUTO-HEALED: {heal_action}")
+                print(f"  [5/5] ✓ AUTO-HEALED (keyword match): {heal_action}")
             else:
-                print(f"  [5/5] ✗ Could not match symptoms to a known bug")
+                # Fallback: Check if similar incidents in memory were previously resolved
+                # This is the MEMORY LOOP — past manual fixes enable future auto-healing
+                print(f"  [5/5] No keyword match. Checking memory for past resolutions...")
+                for inc in similar:
+                    if inc.get("root_cause") and inc.get("distance", 1) < 0.3:
+                        # High similarity to a previously resolved incident — try healing
+                        past_bug = identify_bug_from_memory(inc["root_cause"] + " " + (inc.get("fix") or ""))
+                        if past_bug:
+                            if heal_bug(past_bug):
+                                healed = True
+                                heal_action = past_bug
+                                print(f"  [5/5] ✓ AUTO-HEALED (memory loop): {past_bug}")
+                                print(f"        ↳ Learned from past incident (distance={inc['distance']:.4f})")
+                                break
+                if not healed:
+                    print(f"  [5/5] ✗ Could not auto-heal (no keyword match, no close memory match)")
         else:
             print(f"  [5/5] ⏸ No auto-heal (confidence={confidence})")
 
