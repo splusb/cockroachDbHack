@@ -1,120 +1,156 @@
 """
-Self-healing module - applies code patches automatically when confidence is high.
+Self-healing module — sets heal_flags in CockroachDB to fix bugs at runtime.
 
-The agent reads the buggy code, diagnoses the issue, and if confident,
-applies the fix directly to the source file.
+Instead of patching files on disk, the agent flips a boolean flag in the database.
+The demo-app checks these flags on each request and runs the fixed code path when healed.
 
 Usage:
-    from agent.heal import apply_patch, read_app_file
-    code = read_app_file("app.py")
-    # ... agent reasons and returns code_patch ...
-    success = apply_patch(code_patch)
+    from agent.heal import heal_bug, is_healed, reset_all_bugs
 """
 
-import os
-from typing import Dict, Optional
+import psycopg
+from typing import Optional
 
-from agent.config import BUGGY_APP_PATH
+from agent.config import COCKROACHDB_URL
+
+# Maps symptom keywords to bug_ids in the heal_flags table
+BUG_KEYWORD_MAP = {
+    "password": "login_password_check",
+    "login": "login_password_check",
+    "authentication": "login_password_check",
+    "inverted": "login_password_check",
+    "credential": "login_password_check",
+    "search": "search_column_name",
+    "title": "search_column_name",
+    "column": "search_column_name",
+    "undefined_column": "search_column_name",
+    "checkout": "checkout_total_calc",
+    "total": "checkout_total_calc",
+    "calculation": "checkout_total_calc",
+    "multiply": "checkout_total_calc",
+    "tax": "checkout_total_calc",
+    "subtotal": "checkout_total_calc",
+}
 
 
-def read_app_file(filename: str) -> Optional[str]:
+def heal_bug(bug_id: str) -> bool:
     """
-    Read a source file from the demo app directory.
+    Mark a bug as healed in the heal_flags table.
 
     Args:
-        filename: Name of the file to read (e.g., "app.py", "auth.py")
+        bug_id: The bug identifier (e.g., 'login_password_check')
 
     Returns:
-        File contents as string, or None if file doesn't exist.
+        True if the flag was set successfully, False otherwise.
     """
-    filepath = os.path.join(BUGGY_APP_PATH, filename)
-    if not os.path.exists(filepath):
-        print(f"[heal] File not found: {filepath}")
+    if not COCKROACHDB_URL:
+        print("[heal] No COCKROACHDB_URL configured")
+        return False
+
+    try:
+        conn = psycopg.connect(COCKROACHDB_URL)
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE heal_flags SET healed = true, healed_at = now() WHERE bug_id = %s AND healed = false",
+            (bug_id,)
+        )
+        conn.commit()
+        affected = cur.rowcount
+        conn.close()
+
+        if affected > 0:
+            print(f"[heal] ✓ Bug '{bug_id}' marked as healed in DB")
+            return True
+        else:
+            print(f"[heal] Bug '{bug_id}' was already healed or not found")
+            return False
+    except Exception as e:
+        print(f"[heal] ERROR: {e}")
+        return False
+
+
+def identify_bug(symptoms: str) -> Optional[str]:
+    """
+    Given symptoms text, identify which bug_id it matches.
+
+    Returns:
+        The bug_id string, or None if no match found.
+    """
+    symptoms_lower = symptoms.lower()
+    for keyword, bug_id in BUG_KEYWORD_MAP.items():
+        if keyword in symptoms_lower:
+            return bug_id
+    return None
+
+
+def auto_heal_from_symptoms(symptoms: str) -> Optional[str]:
+    """
+    Attempt to auto-heal based on symptoms.
+    Identifies the bug and sets the flag in DB.
+
+    Returns:
+        Description of what was healed, or None if no match.
+    """
+    bug_id = identify_bug(symptoms)
+    if not bug_id:
+        print("[heal] Could not match symptoms to a known bug")
         return None
 
-    with open(filepath, "r") as f:
-        return f.read()
+    success = heal_bug(bug_id)
+    if success:
+        return f"Healed bug: {bug_id}"
+    return None
 
 
-def list_app_files() -> list:
-    """List all files in the demo app directory."""
-    if not os.path.exists(BUGGY_APP_PATH):
+def is_healed(bug_id: str) -> bool:
+    """Check if a bug has been healed."""
+    if not COCKROACHDB_URL:
+        return False
+    try:
+        conn = psycopg.connect(COCKROACHDB_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT healed FROM heal_flags WHERE bug_id = %s", (bug_id,))
+        row = cur.fetchone()
+        conn.close()
+        return row[0] if row else False
+    except Exception:
+        return False
+
+
+def reset_all_bugs() -> bool:
+    """Reset all heal flags to false (re-inject all bugs)."""
+    if not COCKROACHDB_URL:
+        return False
+    try:
+        conn = psycopg.connect(COCKROACHDB_URL)
+        cur = conn.cursor()
+        cur.execute("UPDATE heal_flags SET healed = false, healed_at = NULL")
+        conn.commit()
+        conn.close()
+        print("[heal] ✓ All bugs reset to unhealed")
+        return True
+    except Exception as e:
+        print(f"[heal] ERROR resetting: {e}")
+        return False
+
+
+def get_all_flags() -> list:
+    """Get the current state of all heal flags."""
+    if not COCKROACHDB_URL:
         return []
-    files = []
-    for root, dirs, filenames in os.walk(BUGGY_APP_PATH):
-        for fname in filenames:
-            if fname.endswith(('.py', '.js', '.html', '.css')):
-                rel_path = os.path.relpath(os.path.join(root, fname), BUGGY_APP_PATH)
-                files.append(rel_path)
-    return files
-
-
-def apply_patch(code_patch: Dict[str, str]) -> bool:
-    """
-    Apply a code patch to the demo app.
-
-    Args:
-        code_patch: Dict with keys:
-            - file: filename to modify
-            - find: exact string to find in the file
-            - replace: string to replace it with
-
-    Returns:
-        True if patch was applied successfully, False otherwise.
-    """
-    if not code_patch:
-        print("[heal] No patch to apply")
-        return False
-
-    filename = code_patch.get("file")
-    find_str = code_patch.get("find")
-    replace_str = code_patch.get("replace")
-
-    if not all([filename, find_str, replace_str]):
-        print("[heal] Invalid patch: missing file, find, or replace")
-        return False
-
-    filepath = os.path.join(BUGGY_APP_PATH, filename)
-
-    if not os.path.exists(filepath):
-        print(f"[heal] Target file not found: {filepath}")
-        return False
-
-    # Read the file
-    with open(filepath, "r") as f:
-        content = f.read()
-
-    # Check if the target string exists
-    if find_str not in content:
-        print(f"[heal] Could not find target string in {filename}")
-        print(f"[heal] Looking for: {find_str[:100]}...")
-        return False
-
-    # Apply the patch
-    new_content = content.replace(find_str, replace_str, 1)
-
-    # Write back
-    with open(filepath, "w") as f:
-        f.write(new_content)
-
-    print(f"[heal] ✓ Patch applied to {filename}")
-    print(f"[heal]   Replaced: {find_str[:60]}...")
-    print(f"[heal]   With:     {replace_str[:60]}...")
-    return True
-
-
-def revert_patch(code_patch: Dict[str, str]) -> bool:
-    """
-    Revert a previously applied patch (swap find and replace).
-
-    Useful for re-injecting bugs for demo purposes.
-    """
-    if not code_patch:
-        return False
-
-    reverted = {
-        "file": code_patch["file"],
-        "find": code_patch["replace"],
-        "replace": code_patch["find"],
-    }
-    return apply_patch(reverted)
+    try:
+        conn = psycopg.connect(COCKROACHDB_URL)
+        cur = conn.cursor()
+        cur.execute("SELECT bug_id, description, healed, healed_at, fix_description FROM heal_flags ORDER BY bug_id")
+        rows = cur.fetchall()
+        conn.close()
+        return [{
+            "bug_id": r[0],
+            "description": r[1],
+            "healed": r[2],
+            "healed_at": r[3].isoformat() if r[3] else None,
+            "fix_description": r[4],
+        } for r in rows]
+    except Exception as e:
+        print(f"[heal] ERROR: {e}")
+        return []

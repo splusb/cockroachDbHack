@@ -19,14 +19,14 @@ COCKROACHDB_URL = os.getenv("COCKROACHDB_URL", "postgresql://root@localhost:2625
 LLM_PROVIDER = os.getenv("LLM_PROVIDER", "openai")
 
 # OpenAI
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "")
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "sk-proi-MO2J8KMZ [LNZzGD BLADXknz4i3U-kU8z69crMGtcEWs5RnimMyLeaLz11BeAXgha6nDpPIVLTjT3BlbkFJrTg9k_XBQHQ2eElmp4u4l-HSP.LADY.CRYAh7DoYLS2jSM3A450DmErgF8cnT3MgzVtygZ_KIA")
 OPENAI_EMBEDDING_MODEL = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
 OPENAI_LLM_MODEL = os.getenv("OPENAI_LLM_MODEL", "gpt-4o-mini")
 
 # AWS (fallback when LLM_PROVIDER=bedrock)
 AWS_REGION = os.getenv("BEDROCK_REGION", os.getenv("AWS_REGION", "us-west-2"))
 AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID", "")
-AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "")
+AWS_SECRET_ACCESS_KEY = os.getenv("AWS_SECRET_ACCESS_KEY", "sk-proi-MO2J8KMZ [LNZzGD BLADXknz4i3U-kU8z69crMGtcEWs5RnimMyLeaLz11BeAXgha6nDpPIVLTjT3BlbkFJrTg9k_XBQHQ2eElmp4u4l-HSP.LADY.CRYAh7DoYLS2jSM3A450DmErgF8cnT3MgzVtygZ_KIA")
 
 # Bedrock model IDs
 EMBEDDING_MODEL_ID = os.getenv("EMBEDDING_MODEL_ID", "amazon.titan-embed-text-v2:0")

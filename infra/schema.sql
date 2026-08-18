@@ -14,6 +14,8 @@ CREATE TABLE IF NOT EXISTS incidents (
   fix STRING,
   runbook_url STRING,
   resolved BOOLEAN NOT NULL DEFAULT false,
+  status STRING NOT NULL DEFAULT 'pending',
+  confidence STRING,
   embedding VECTOR(1536) NOT NULL
 );
 

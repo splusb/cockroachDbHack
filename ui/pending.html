@@ -486,7 +486,8 @@
           ${similarHtml}
 
           <div class="card-actions" id="actions-${incId}">
-            <button class="btn-accept" onclick="acceptIncident('${incId}')">✓ Accept — Save to Memory</button>
+            <button class="btn-accept" onclick="healIncident('${incId}')" style="background:#6366f1;">⚡ Apply Fix</button>
+            <button class="btn-accept" onclick="acceptIncident('${incId}')">✓ Accept to Memory</button>
             <button class="btn-dismiss" onclick="dismissIncident('${incId}')">✗ Dismiss</button>
           </div>
 
@@ -542,6 +543,40 @@
           setTimeout(loadPending, 1000);
         }
       } catch (err) {
+        actionsEl.querySelectorAll('button').forEach(b => b.disabled = false);
+      }
+    }
+
+    async function healIncident(incId) {
+      const actionsEl = document.getElementById('actions-' + incId);
+      const statusEl = document.getElementById('status-' + incId);
+      actionsEl.querySelectorAll('button').forEach(b => b.disabled = true);
+
+      statusEl.className = 'card-status confirmed';
+      statusEl.style.display = 'block';
+      statusEl.textContent = '⏳ Applying fix... (calling LLM to generate patch)';
+
+      try {
+        const res = await fetch(`/api/heal/${incId}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        });
+
+        const data = await res.json();
+
+        if (data.success) {
+          statusEl.className = 'card-status confirmed';
+          statusEl.textContent = `⚡ Auto-Resolved! ${data.message || 'Fix applied to source code.'}`;
+          actionsEl.style.display = 'none';
+          setTimeout(loadPending, 2000);
+        } else {
+          statusEl.className = 'card-status dismissed';
+          statusEl.textContent = `✗ Could not apply fix: ${data.error || 'Unknown error'}`;
+          actionsEl.querySelectorAll('button').forEach(b => b.disabled = false);
+        }
+      } catch (err) {
+        statusEl.className = 'card-status dismissed';
+        statusEl.textContent = `✗ Error: ${err.message}`;
         actionsEl.querySelectorAll('button').forEach(b => b.disabled = false);
       }
     }

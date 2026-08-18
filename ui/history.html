@@ -292,6 +292,14 @@
       <h2 class="page-title">Incident History</h2>
       <p class="page-subtitle">All past incidents stored in memory</p>
 
+      <div class="refresh-bar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+        <span class="count-label"><strong id="stat-total">—</strong> incidents in memory</span>
+        <button onclick="resetBugs()" style="
+          background: #dc2626; border: none; color: white; padding: 8px 14px;
+          border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
+        ">🔄 Reset Bugs (Re-inject All)</button>
+      </div>
+
       <div class="stats-bar" id="stats-bar">
         <div class="stat-item">
           <span class="stat-value" id="stat-total">—</span>
@@ -300,6 +308,10 @@
         <div class="stat-item">
           <span class="stat-value" id="stat-resolved" style="color: #4ade80;">—</span>
           <span class="stat-label">Resolved</span>
+        </div>
+        <div class="stat-item">
+          <span class="stat-value" id="stat-healed" style="color: #a5b4fc;">—</span>
+          <span class="stat-label">Auto-Resolved</span>
         </div>
         <div class="stat-item">
           <span class="stat-value" id="stat-open" style="color: #fb923c;">—</span>
@@ -342,6 +354,7 @@
     function updateStats() {
       document.getElementById('stat-total').textContent = allIncidents.length;
       document.getElementById('stat-resolved').textContent = allIncidents.filter(i => i.resolved).length;
+      document.getElementById('stat-healed').textContent = allIncidents.filter(i => i.status === 'auto_healed').length;
       document.getElementById('stat-open').textContent = allIncidents.filter(i => !i.resolved).length;
       const services = new Set(allIncidents.map(i => i.service));
       document.getElementById('stat-services').textContent = services.size;
@@ -398,7 +411,7 @@
               <th>Service</th>
               <th>Symptoms</th>
               <th>Root Cause</th>
-              <th>Status</th>
+              <th>Resolution</th>
             </tr>
           </thead>
           <tbody>`;
@@ -406,13 +419,26 @@
       filtered.forEach(inc => {
         const time = inc.created_at ? formatTime(inc.created_at) : '—';
         const serviceClass = inc.service.replace(/[^a-z-]/g, '');
+
+        let resolution, resStyle;
+        if (inc.status === 'auto_healed') {
+          resolution = 'Auto-Resolved';
+          resStyle = 'background: #1e1b4b; color: #a5b4fc;';
+        } else if (inc.resolved) {
+          resolution = 'Manually Resolved';
+          resStyle = 'background: #052e16; color: #4ade80;';
+        } else {
+          resolution = 'Open';
+          resStyle = 'background: #422006; color: #fb923c;';
+        }
+
         html += `
           <tr class="incident-row" data-id="${inc.id}" onclick="toggleRow(this, '${inc.id}')">
             <td class="time-text">${time}</td>
             <td><span class="service-tag ${serviceClass}">${escapeHtml(inc.service)}</span></td>
             <td class="symptoms-text" title="${escapeHtml(inc.symptoms)}">${escapeHtml(inc.symptoms)}</td>
             <td class="root-cause-text" title="${escapeHtml(inc.root_cause || '')}">${escapeHtml(inc.root_cause || '—')}</td>
-            <td><span class="status-badge ${inc.resolved ? 'resolved' : 'open'}">${inc.resolved ? 'Resolved' : 'Open'}</span></td>
+            <td><span class="status-badge" style="${resStyle}">${resolution}</span></td>
           </tr>`;
       });
 
@@ -446,9 +472,17 @@
               <div class="label">Root Cause</div>
               <div class="value">${escapeHtml(inc.root_cause || 'Not determined')}</div>
             </div>
-            <div class="expanded-section">
+            <div class="expanded-section" style="grid-column: 1 / -1;">
               <div class="label">Fix</div>
-              <div class="value">${escapeHtml(inc.fix || 'Not determined')}</div>
+              ${!inc.resolved ? `
+                <textarea id="fix-edit-${inc.id}" style="
+                  width: 100%; min-height: 60px; padding: 10px; border-radius: 6px;
+                  background: #0f1117; border: 1px solid #3f3f46; color: #e4e4e7;
+                  font-size: 13px; resize: vertical; font-family: inherit;
+                ">${escapeHtml(inc.fix || '')}</textarea>
+              ` : `
+                <div class="value">${escapeHtml(inc.fix || 'Not determined')}</div>
+              `}
             </div>
             <div class="expanded-section">
               <div class="label">Incident ID</div>
@@ -456,10 +490,10 @@
             </div>
             ${!inc.resolved ? `
             <div class="expanded-section" style="margin-top: 12px;">
-              <button onclick="resolveIncident('${inc.id}', this)" style="
+              <button onclick="manualResolve('${inc.id}')" style="
                 background: #059669; color: white; border: none; padding: 8px 16px;
                 border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer;
-              ">✓ Mark as Resolved</button>
+              ">✓ Mark as Manually Resolved</button>
             </div>` : `
             <div class="expanded-section" style="margin-top: 12px;">
               <span style="color: #4ade80; font-size: 13px;">✓ This incident is resolved</span>
@@ -489,24 +523,50 @@
       return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     }
 
-    async function resolveIncident(id, btnEl) {
-      btnEl.disabled = true;
-      btnEl.textContent = 'Resolving...';
+    async function manualResolve(id) {
+      const fixText = document.getElementById('fix-edit-' + id)?.value || '';
+      const btn = event.target;
+      btn.disabled = true;
+      btn.textContent = 'Resolving...';
 
       try {
-        const res = await fetch(`/api/incidents/${id}/resolve`, { method: 'PATCH' });
+        const res = await fetch(`/api/incidents/${id}/resolve`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ fix: fixText })
+        });
         if (res.ok) {
-          // Update local data and re-render
           const inc = allIncidents.find(i => i.id === id);
-          if (inc) inc.resolved = true;
+          if (inc) {
+            inc.resolved = true;
+            inc.status = 'confirmed';
+            inc.fix = fixText;
+          }
           updateStats();
           renderTable();
         } else {
           const data = await res.json();
-          btnEl.textContent = `Failed: ${data.error || 'unknown'}`;
+          btn.textContent = `Failed: ${data.error || 'unknown'}`;
+          btn.disabled = false;
         }
       } catch (err) {
-        btnEl.textContent = `Error: ${err.message}`;
+        btn.textContent = `Error: ${err.message}`;
+        btn.disabled = false;
+      }
+    }
+
+    async function resetBugs() {
+      if (!confirm('This will re-inject all bugs into the demo app. Continue?')) return;
+      try {
+        const res = await fetch('/api/reset-bugs', { method: 'POST' });
+        const data = await res.json();
+        if (data.success) {
+          alert('All bugs re-injected. The demo app is buggy again.');
+        } else {
+          alert('Failed: ' + (data.error || 'unknown'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
       }
     }
 
