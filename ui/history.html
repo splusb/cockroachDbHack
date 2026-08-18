@@ -293,11 +293,25 @@
       <p class="page-subtitle">All past incidents stored in memory</p>
 
       <div class="refresh-bar" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
-        <span class="count-label"><strong id="stat-total">—</strong> incidents in memory</span>
+        <span class="count-label"><strong id="stat-total-label">—</strong> incidents in memory</span>
         <button onclick="resetBugs()" style="
           background: #dc2626; border: none; color: white; padding: 8px 14px;
           border-radius: 6px; font-size: 12px; font-weight: 600; cursor: pointer;
-        ">🔄 Reset Bugs (Re-inject All)</button>
+        ">🔄 Reset All Bugs</button>
+      </div>
+
+      <!-- Bug Control Panel -->
+      <div id="bugPanel" style="
+        background: #1c1c22; border: 1px solid #27272a; border-radius: 10px;
+        padding: 16px 20px; margin-bottom: 24px;
+      ">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <span style="font-size:13px; font-weight:600; color:#e4e4e7;">Bug Control Panel</span>
+          <button onclick="loadBugFlags()" style="background:none; border:none; color:#71717a; font-size:11px; cursor:pointer;">↻ Refresh</button>
+        </div>
+        <div id="bugFlags" style="display:grid; gap:10px;">
+          <div style="color:#71717a; font-size:12px;">Loading...</div>
+        </div>
       </div>
 
       <div class="stats-bar" id="stats-bar">
@@ -562,6 +576,7 @@
         const data = await res.json();
         if (data.success) {
           alert('All bugs re-injected. The demo app is buggy again.');
+          loadBugFlags();
         } else {
           alert('Failed: ' + (data.error || 'unknown'));
         }
@@ -569,6 +584,62 @@
         alert('Error: ' + err.message);
       }
     }
+
+    async function loadBugFlags() {
+      try {
+        const res = await fetch('/api/heal-flags');
+        const data = await res.json();
+        if (!data.success) return;
+        const container = document.getElementById('bugFlags');
+        const shortNames = {
+          'login_password_check': 'Login — wrong password comparison',
+          'search_column_name': 'Search — wrong DB column name',
+          'checkout_total_calc': 'Checkout — wrong total formula',
+          'order_creation_column': 'Order — wrong INSERT column',
+        };
+        container.innerHTML = data.flags.map(f => {
+          const label = shortNames[f.bug_id] || f.bug_id;
+          return `
+          <div style="display:flex; align-items:center; justify-content:space-between; padding:10px 12px; background:#0f1117; border-radius:6px; border:1px solid #27272a;">
+            <span style="font-size:13px; color:#e4e4e7;">${label}</span>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:11px; padding:3px 8px; border-radius:4px; font-weight:600;
+                ${f.healed ? 'background:#052e16; color:#4ade80;' : 'background:#422006; color:#fb923c;'}">
+                ${f.healed ? 'Healed' : 'Active'}
+              </span>
+              <button onclick="toggleBug('${f.bug_id}', ${f.healed})" style="
+                background: ${f.healed ? '#dc2626' : '#059669'}; border: none; color: white;
+                padding: 5px 10px; border-radius: 4px; font-size: 11px; font-weight: 600; cursor: pointer;
+              ">${f.healed ? 'Re-inject' : 'Heal'}</button>
+            </div>
+          </div>`;
+        }).join('');
+      } catch (err) {
+        console.error('Failed to load bug flags:', err);
+      }
+    }
+
+    async function toggleBug(bugId, currentlyHealed) {
+      const newState = !currentlyHealed;
+      try {
+        const res = await fetch('/api/toggle-bug', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ bug_id: bugId, healed: newState })
+        });
+        const data = await res.json();
+        if (data.success) {
+          loadBugFlags();
+        } else {
+          alert('Failed: ' + (data.error || 'unknown'));
+        }
+      } catch (err) {
+        alert('Error: ' + err.message);
+      }
+    }
+
+    // Load bug flags on page load
+    loadBugFlags();
 
     loadIncidents();
   </script>

@@ -451,5 +451,39 @@ def reset_bugs():
     return jsonify({"success": False, "error": "Failed to reset bugs"}), 500
 
 
+@app.route("/api/toggle-bug", methods=["POST"])
+def toggle_bug():
+    """Toggle a specific bug's heal state."""
+    data = request.get_json()
+    bug_id = data.get("bug_id")
+    healed = data.get("healed")
+
+    if not bug_id or healed is None:
+        return jsonify({"error": "bug_id and healed are required"}), 400
+
+    try:
+        from agent.db import get_pool
+        pool = get_pool()
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                if healed:
+                    cur.execute(
+                        "UPDATE heal_flags SET healed = true, healed_at = now() WHERE bug_id = %s",
+                        (bug_id,)
+                    )
+                else:
+                    cur.execute(
+                        "UPDATE heal_flags SET healed = false, healed_at = NULL WHERE bug_id = %s",
+                        (bug_id,)
+                    )
+                conn.commit()
+                if cur.rowcount == 0:
+                    return jsonify({"success": False, "error": "Bug not found"}), 404
+
+        return jsonify({"success": True, "bug_id": bug_id, "healed": healed})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
