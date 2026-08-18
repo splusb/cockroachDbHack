@@ -146,6 +146,7 @@ def investigate():
     data = request.get_json()
     service = data.get("service", "unknown")
     symptoms = data.get("symptoms", "")
+    source = data.get("source", "dashboard")  # "demo-app" or "dashboard"
 
     if not symptoms:
         return jsonify({"error": "symptoms field is required"}), 400
@@ -193,7 +194,7 @@ def investigate():
         else:
             print(f"  [5/5] ⏸ No auto-heal (confidence={confidence})")
 
-        # Write to DB ONLY if auto-healed (high confidence + bug matched)
+        # Write to DB
         incident_id = None
         if healed:
             incident_id = write_incident(
@@ -205,9 +206,22 @@ def investigate():
                 status="auto_healed",
                 confidence=confidence,
             )
-            print(f"  → Saved to memory: {incident_id}")
+            print(f"  → Saved to memory (auto-healed): {incident_id}")
+        elif source == "demo-app":
+            # From demo app but NOT auto-healed → save as pending with LOW confidence label
+            incident_id = write_incident(
+                service=service,
+                symptoms=symptoms,
+                root_cause=analysis.get("root_cause", ""),
+                fix=analysis.get("fix", ""),
+                embedding=embedding,
+                status="pending",
+                confidence="low",
+            )
+            print(f"  → Saved as PENDING (low confidence): {incident_id}")
         else:
-            print(f"  → Not saved (low confidence — needs manual review)")
+            # From investigate tab — don't log anywhere
+            print(f"  → Not saved (investigate tab only)")
         print(f"{'='*60}\n")
 
         return jsonify({

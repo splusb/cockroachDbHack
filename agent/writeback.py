@@ -58,11 +58,11 @@ def write_incident(
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO incidents (service, symptoms, root_cause, fix, runbook_url, embedding, status, confidence)
-                    VALUES (%s, %s, %s, %s, %s, %s::vector, %s, %s)
+                    INSERT INTO incidents (service, symptoms, root_cause, fix, runbook_url, embedding, status, confidence, resolved)
+                    VALUES (%s, %s, %s, %s, %s, %s::vector, %s, %s, %s)
                     RETURNING id
                     """,
-                    (service, symptoms, root_cause, fix, runbook_url, vector_str, status, confidence),
+                    (service, symptoms, root_cause, fix, runbook_url, vector_str, status, confidence, status == "auto_healed"),
                 )
                 result = cur.fetchone()
                 conn.commit()

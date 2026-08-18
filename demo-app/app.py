@@ -432,7 +432,7 @@ LOGIN_PAGE = """
             fetch(AGENT + '/api/investigate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ service: 'demo-app', symptoms })
+                body: JSON.stringify({ service: 'demo-app', symptoms, source: 'demo-app' })
             }).then(r => r.json()).then(r => console.log('[Agent]', r)).catch(() => {});
         }
     </script>
@@ -602,7 +602,7 @@ SHOP_PAGE = """
             fetch(AGENT + '/api/investigate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ service: 'demo-app', symptoms })
+                body: JSON.stringify({ service: 'demo-app', symptoms, source: 'demo-app' })
             }).then(r => r.json()).then(r => console.log('[Agent]', r)).catch(() => {});
         }
 

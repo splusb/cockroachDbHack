@@ -21,27 +21,29 @@ BUG_KEYWORD_MAP = {
     "rejected": "login_password_check",
     "inverted": "login_password_check",
     "search": "search_column_name",
-    "column": "search_column_name",
     "title": "search_column_name",
     "results": "search_column_name",
+    "search fails": "search_column_name",
     "checkout": "checkout_total_calc",
     "total": "checkout_total_calc",
     "calculation": "checkout_total_calc",
     "multiplication": "checkout_total_calc",
     "subtotal": "checkout_total_calc",
     "tax": "checkout_total_calc",
-    "order": "order_creation_column",
-    "user_name": "order_creation_column",
-    "insert": "order_creation_column",
-    "order placement": "order_creation_column",
-    "orders table": "order_creation_column",
+    # NOTE: "order" keywords intentionally NOT mapped — this bug should NOT auto-heal
+    # to demonstrate the manual review flow in New Incidents page
 }
 
 
 def identify_bug(symptoms: str) -> Optional[str]:
     """Identify which bug the symptoms relate to based on keywords."""
     symptoms_lower = symptoms.lower()
-    scores = {"login_password_check": 0, "search_column_name": 0, "checkout_total_calc": 0}
+    scores = {
+        "login_password_check": 0,
+        "search_column_name": 0,
+        "checkout_total_calc": 0,
+        "order_creation_column": 0,
+    }
 
     for keyword, bug_id in BUG_KEYWORD_MAP.items():
         if keyword in symptoms_lower:
