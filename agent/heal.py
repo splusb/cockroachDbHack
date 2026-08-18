@@ -30,6 +30,11 @@ BUG_KEYWORD_MAP = {
     "multiplication": "checkout_total_calc",
     "subtotal": "checkout_total_calc",
     "tax": "checkout_total_calc",
+    "order": "order_creation_column",
+    "user_name": "order_creation_column",
+    "insert": "order_creation_column",
+    "order placement": "order_creation_column",
+    "orders table": "order_creation_column",
 }
 
 

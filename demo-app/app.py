@@ -227,6 +227,64 @@ def checkout():
 
 
 # ============================================================
+# API: Place Order
+# BUG: INSERT uses 'user_name' column which doesn't exist (should be 'user_id')
+# HEAL: heal_flags.order_creation_column
+# ============================================================
+
+@app.route("/place-order", methods=["POST"])
+def place_order():
+    data = request.get_json()
+    username = data.get("user_id", "admin")
+    items = data.get("items", [])
+    total = data.get("total", 0)
+
+    if not items:
+        return jsonify({"success": False, "error": "Missing items"}), 400
+
+    try:
+        conn = get_db()
+        cur = conn.cursor()
+
+        # Look up user UUID from username
+        cur.execute("SELECT id FROM users WHERE username = %s", (username,))
+        user_row = cur.fetchone()
+        if not user_row:
+            conn.close()
+            return jsonify({"success": False, "error": "User not found"}), 404
+        user_id = str(user_row[0])
+
+        subtotal = total / 1.08
+        tax = total - subtotal
+
+        if is_healed("order_creation_column"):
+            # FIXED: correct column name
+            cur.execute(
+                "INSERT INTO orders (user_id, subtotal, tax, total, status) VALUES (%s, %s, %s, %s, 'confirmed') RETURNING id",
+                (user_id, round(subtotal, 2), round(tax, 2), round(total, 2))
+            )
+        else:
+            # BUGGY: 'user_name' column doesn't exist
+            cur.execute(
+                "INSERT INTO orders (user_name, subtotal, tax, total, status) VALUES (%s, %s, %s, %s, 'confirmed') RETURNING id",
+                (user_id, round(subtotal, 2), round(tax, 2), round(total, 2))
+            )
+
+        order_id = str(cur.fetchone()[0])
+        conn.commit()
+        conn.close()
+
+        return jsonify({
+            "success": True,
+            "order_id": order_id,
+            "message": f"Order {order_id[:8]}... placed successfully!",
+        })
+
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
+
+
+# ============================================================
 # API: Bug Status (for the agent dashboard)
 # ============================================================
 
@@ -502,7 +560,7 @@ SHOP_PAGE = """
                         showToast('Order total looks wrong: $' + data.total.toFixed(2) + ' (expected ~$' + expected.toFixed(2) + ')', true);
                         reportError('Checkout total calculation is wrong. Subtotal=$' + data.subtotal + ', Tax=$' + data.tax + ', but Total=$' + data.total + '. Expected total should be subtotal + tax = $' + expected.toFixed(2) + '. It appears the code is using multiplication instead of addition.');
                     } else {
-                        showToast('Order placed! Total: $' + data.total.toFixed(2), false);
+                        await placeOrder(data.total);
                     }
                     cart = [];
                     document.getElementById('checkoutBar').style.display = 'none';
@@ -510,6 +568,27 @@ SHOP_PAGE = """
                     showToast('Checkout failed: ' + data.error, true);
                 }
             } catch (e) { showToast('Network error', true); }
+        }
+
+        async function placeOrder(total) {
+            try {
+                const res = await fetch('/place-order', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        user_id: 'admin',
+                        items: cart,
+                        total: total
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showToast('Order placed! ' + data.message, false);
+                } else {
+                    showToast('Order failed: ' + data.error, true);
+                    reportError('Order placement fails when inserting into orders table. SQL error: ' + data.error + '. The INSERT statement uses wrong column name user_name instead of user_id.');
+                }
+            } catch (e) { showToast('Network error placing order', true); }
         }
 
         function showToast(msg, isError) {

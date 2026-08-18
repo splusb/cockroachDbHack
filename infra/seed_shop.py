@@ -112,6 +112,7 @@ flags = [
     ("login_password_check", "Login: password comparison is inverted (!= instead of ==)", "Change != to == in password comparison"),
     ("search_column_name", "Search: query uses wrong column 'title' instead of 'name'", "Change 'title' to 'name' in the SQL query"),
     ("checkout_total_calc", "Checkout: total = subtotal * tax instead of subtotal + tax", "Change subtotal * tax to subtotal + tax"),
+    ("order_creation_column", "Order placement: INSERT uses wrong column user_name instead of user_id", "Change user_name to user_id in the INSERT INTO orders statement"),
 ]
 
 for bug_id, description, fix_desc in flags:
