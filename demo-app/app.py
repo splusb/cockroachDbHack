@@ -613,8 +613,9 @@ SHOP_PAGE = """
 """
 
 if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5001))
     print("\\n" + "=" * 50)
-    print("  ShopEasy running at http://127.0.0.1:5001")
+    print(f"  ShopEasy running on port {port}")
     print("  DB: " + (COCKROACHDB_URL[:50] + "..." if COCKROACHDB_URL else "NOT SET"))
     print("=" * 50 + "\\n")
-    app.run(debug=True, port=5001)
+    app.run(debug=False, host="0.0.0.0", port=port)
