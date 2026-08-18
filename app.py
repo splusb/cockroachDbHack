@@ -456,10 +456,25 @@ def get_heal_flags():
 
 @app.route("/api/reset-bugs", methods=["POST"])
 def reset_bugs():
-    """Reset all bugs to unhealed (re-inject for demo replay)."""
+    """Reset all bugs to unhealed AND clear non-seed incidents (full demo reset)."""
+    from agent.db import get_pool
+
     success = reset_all_bugs()
+
+    # Also delete any auto_healed or pending incidents (keep only seed data)
+    try:
+        pool = get_pool()
+        with pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM incidents WHERE status IN ('auto_healed', 'pending')")
+                deleted = cur.rowcount
+                conn.commit()
+        print(f"[reset] Deleted {deleted} non-seed incidents from memory")
+    except Exception as e:
+        print(f"[reset] Error clearing incidents: {e}")
+
     if success:
-        return jsonify({"success": True, "message": "All bugs re-injected. Demo app is buggy again."})
+        return jsonify({"success": True, "message": "All bugs re-injected and incident memory cleared for demo."})
     return jsonify({"success": False, "error": "Failed to reset bugs"}), 500
 
 

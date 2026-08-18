@@ -5,16 +5,22 @@ Uses psycopg_pool for efficient connection reuse instead of
 creating a new connection per query.
 """
 
-from psycopg_pool import ConnectionPool
+try:
+    from psycopg_pool import ConnectionPool
+except ImportError:
+    ConnectionPool = None
+
 from agent.config import COCKROACHDB_URL
 
 # Module-level pool, lazily initialized
 _pool = None
 
 
-def get_pool() -> ConnectionPool:
+def get_pool():
     """Get or create the shared connection pool."""
     global _pool
+    if ConnectionPool is None:
+        raise RuntimeError("psycopg_pool not installed. Install with: pip install psycopg_pool")
     if _pool is None:
         if not COCKROACHDB_URL:
             raise RuntimeError("COCKROACHDB_URL not configured")
