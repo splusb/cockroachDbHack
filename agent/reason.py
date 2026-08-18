@@ -13,6 +13,8 @@ import boto3
 from typing import List, Dict, Any, Optional
 from openai import OpenAI
 
+from agent.skills import load_skill_context
+
 from agent.config import (
     LLM_PROVIDER,
     OPENAI_API_KEY,
@@ -112,6 +114,17 @@ def _build_user_prompt(
 
 Analyze the code above for the bug causing the reported symptoms. If you can identify the exact fix, provide it in code_patch.
 """
+
+    # Load relevant CockroachDB skill for context
+    skill = load_skill_context(symptoms)
+    if skill:
+        print(f"  [skills] ✓ Loaded skill: {skill['name']} ({len(skill['content'])} chars)")
+        prompt += f"""
+## CockroachDB Best Practices (from skill: {skill['name']})
+{skill['content']}
+"""
+    else:
+        print(f"  [skills] No matching skill found for these symptoms")
 
     prompt += "\nRespond with the JSON format specified in the system prompt."
     return prompt

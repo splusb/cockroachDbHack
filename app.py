@@ -130,6 +130,31 @@ def list_pending():
         return jsonify({"error": str(e)}), 500
 
 
+# ============================================================
+# Skill Matching — maps symptoms to relevant CockroachDB skills
+# ============================================================
+
+from agent.skills import load_skill_context, match_skill
+
+
+def _match_skill(symptoms: str) -> dict:
+    """Match symptoms to a relevant CockroachDB skill from the library."""
+    skill = load_skill_context(symptoms)
+    if skill:
+        return {
+            "name": skill["name"],
+            "category": skill["category"],
+            "path": skill["path"],
+            "loaded": True,
+        }
+    return {
+        "name": "general-diagnostics",
+        "category": "cockroachdb-observability-and-diagnostics",
+        "path": None,
+        "loaded": False,
+    }
+
+
 @app.route("/api/investigate", methods=["POST"])
 def investigate():
     """
@@ -259,6 +284,7 @@ def investigate():
             "auto_healed": healed,
             "heal_action": heal_action,
             "status": "auto_healed" if healed else "pending",
+            "relevant_skill": _match_skill(symptoms),
         })
 
     except Exception as e:
