@@ -198,18 +198,21 @@ def investigate():
         else:
             print(f"  [5/5] ⏸ No auto-heal (confidence={confidence})")
 
-        # Write to DB
-        incident_id = write_incident(
-            service=service,
-            symptoms=symptoms,
-            root_cause=analysis.get("root_cause", ""),
-            fix=analysis.get("fix", ""),
-            embedding=embedding,
-            status="auto_healed" if healed else "pending",
-            confidence=confidence,
-        )
-        print(f"  → Saved: {incident_id}")
-        print(f"  → Status: {'AUTO-HEALED' if healed else 'pending'}")
+        # Write to DB ONLY if auto-healed (high confidence + bug matched)
+        incident_id = None
+        if healed:
+            incident_id = write_incident(
+                service=service,
+                symptoms=symptoms,
+                root_cause=analysis.get("root_cause", ""),
+                fix=analysis.get("fix", ""),
+                embedding=embedding,
+                status="auto_healed",
+                confidence=confidence,
+            )
+            print(f"  → Saved to memory: {incident_id}")
+        else:
+            print(f"  → Not saved (low confidence — needs manual review)")
         print(f"{'='*60}\n")
 
         return jsonify({
